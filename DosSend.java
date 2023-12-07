@@ -8,7 +8,7 @@ public class DosSend {
     final int FECH = 44100; // fréquence d'échantillonnage
     final int FP = 1000;    // fréquence de la porteuse
     final int BAUDS = 100;  // débit en symboles par seconde
-    final int FMT = 16 ;    // format des données
+    final int FMT = 8;    // format des données
     final int MAX_AMP = (1<<(FMT-1))-1; // amplitude max en entier
     final int CHANNELS = 1; // nombre de voies audio (1 = mono)
     final int[] START_SEQ = {1,0,1,0,1,0,1,0}; // séquence de synchro au début
@@ -97,16 +97,24 @@ public class DosSend {
 
         int charCount = 0;
         while (input.hasNext()) {
-            String l = input.next();
+            String l = input.nextLine();
             int lLength = l.length();
             charCount += lLength;
-            char[] dataCharNew = new char[dataChar.length + lLength];
-            if (dataChar.length - 1 >= 0) System.arraycopy(dataChar, 0, dataCharNew, 0, dataChar.length - 1);
-            int j = 0; // pour déplacer les éléments
-            for (int i = 0; i < lLength; i++) {
-                dataCharNew[dataChar.length + j] = l.charAt(i);
-                j++;
+
+            // Count the newline character if it's not the last line
+            if (input.hasNext()) {
+                charCount++;
             }
+
+            char[] dataCharNew = new char[dataChar.length + lLength + 1];
+            System.arraycopy(dataChar, 0, dataCharNew, 0, dataChar.length);
+            l.getChars(0, lLength, dataCharNew, dataChar.length);
+
+            // Add a newline character if it's not the last line
+            if (input.hasNext()) {
+                dataCharNew[dataChar.length + lLength] = '\n';
+            }
+
             dataChar = dataCharNew;
         }
 
@@ -119,11 +127,14 @@ public class DosSend {
      * @return byte array containing only 0 & 1
      */
     public byte[] charToBits(char[] chars) {
+        if(chars == null) {
+            throw new IllegalArgumentException("Input character array should not be null.");
+        }
+
         StringBuilder binaryStr = new StringBuilder();
         for (char c : chars) {
             StringBuilder binaryChar = new StringBuilder(Integer.toBinaryString(c));
-            // Ensuring it's 16 bits
-            while (binaryChar.length() < 16) {
+            while (binaryChar.length() < FMT) {
                 binaryChar.insert(0, "0");
             }
             binaryStr.append(binaryChar);
@@ -141,13 +152,26 @@ public class DosSend {
     /**
      * Modulate the data to send and apply the symbol throughput via BAUDS and FECH.
      * @param bits the data to modulate
-     *
-     * TODO
      */
     public void modulateData(byte[] bits){
-        /*
-            À compléter
-        */
+        if (bits == null)
+            throw new IllegalArgumentException("Input bits should not be null");
+
+        duree = (double) bits.length / BAUDS;
+        dataMod = new double[(int)(duree * FECH)];
+
+        for (int i = 0; i < bits.length; i++) {
+            double timeStart = (double) i / BAUDS;
+            double timeEnd = (double) (i+1) / BAUDS;
+
+            for (double t = timeStart, idx = 0; t < timeEnd; t += 1.0 / FECH, idx++) {
+                double phase = 2 * Math.PI * t * FECH;
+                if (bits[i] == 1) {
+                    phase += Math.PI;
+                }
+                dataMod[(int) idx]  = Math.sin(phase);
+            }
+        }
     }
 
 
