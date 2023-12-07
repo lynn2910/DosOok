@@ -1,5 +1,6 @@
 import java.io.File;
 import java.io.FileOutputStream;
+import java.util.List;
 import java.util.Scanner;
 
 
@@ -55,6 +56,7 @@ public class DosSend {
 
     /**
      * Create and write the header of a wav file
+     * TODO
      */
     public void writeWavHeader(){
         taille = (long)(FECH * duree);
@@ -72,6 +74,7 @@ public class DosSend {
     /**
      * Write the data in the wav file
      * after normalizing its amplitude to the maximum value of the format (8 bits signed)
+     * TODO
      */
     public void writeNormalizeWavData(){
         try {
@@ -88,26 +91,58 @@ public class DosSend {
      * @return the number of characters read
      */
     public int readTextData(){
-        /*
-            À compléter
-        */
+        if (this.dataChar == null) {
+            this.dataChar = new char[0];
+        }
+
+        int charCount = 0;
+        while (input.hasNext()) {
+            String l = input.next();
+            int lLength = l.length();
+            charCount += lLength;
+            char[] dataCharNew = new char[dataChar.length + lLength];
+            if (dataChar.length - 1 >= 0) System.arraycopy(dataChar, 0, dataCharNew, 0, dataChar.length - 1);
+            int j = 0; // pour déplacer les éléments
+            for (int i = 0; i < lLength; i++) {
+                dataCharNew[dataChar.length + j] = l.charAt(i);
+                j++;
+            }
+            dataChar = dataCharNew;
+        }
+
+        return charCount;
     }
 
     /**
      * convert a char array to a bit array
-     * @param chars
+     * @param chars The chars to convert
      * @return byte array containing only 0 & 1
      */
-    public byte[] charToBits(char[] chars){
-        /*
-             À compléter
-        */
+    public byte[] charToBits(char[] chars) {
+        StringBuilder binaryStr = new StringBuilder();
+        for (char c : chars) {
+            StringBuilder binaryChar = new StringBuilder(Integer.toBinaryString(c));
+            // Ensuring it's 16 bits
+            while (binaryChar.length() < 16) {
+                binaryChar.insert(0, "0");
+            }
+            binaryStr.append(binaryChar);
+        }
+
+        // Converting binary string to byte array
+        byte[] byteArr = new byte[binaryStr.length()];
+        for (int i = 0; i < binaryStr.length(); i++) {
+            byteArr[i] = (byte) (binaryStr.charAt(i) == '1' ? 1 : 0);
+        }
+        return byteArr;
     }
 
 
     /**
      * Modulate the data to send and apply the symbol throughput via BAUDS and FECH.
      * @param bits the data to modulate
+     *
+     * TODO
      */
     public void modulateData(byte[] bits){
         /*
@@ -117,6 +152,7 @@ public class DosSend {
 
 
     /**
+     * TODO
      * Display a signal in a window
      * @param sig  the signal to display
      * @param start the first sample to display
@@ -131,6 +167,7 @@ public class DosSend {
     }
 
     /**
+     * TODO
      * Display signals in a window
      * @param listOfSigs  a list of the signals to display
      * @param start the first sample to display
@@ -151,7 +188,6 @@ public class DosSend {
         // lit le texte à envoyer depuis l'entrée standard
         // et calcule la durée de l'audio correspondant
         dosSend.duree = (double)(dosSend.readTextData()+dosSend.START_SEQ.length/8)*8.0/dosSend.BAUDS;
-
 
         // génère le signal modulé après avoir converti les données en bits
         dosSend.modulateData(dosSend.charToBits(dosSend.dataChar));
