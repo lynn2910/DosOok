@@ -1,5 +1,7 @@
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
 
@@ -58,31 +60,65 @@ public class DosSend {
      * Create and write the header of a wav file
      * TODO
      */
-    public void writeWavHeader(){
-        taille = (long)(FECH * duree);
-        long nbBytes = taille * CHANNELS * FMT / 8;
-        try  {
-            outStream.write(new byte[]{'R', 'I', 'F', 'F'});
-            /*
-                À compléter
-            */
-        } catch(Exception e){
-            System.out.printf(e.toString());
+    public void writeWavHeader() {
+        try {
+            int subChunk1Size = 16;
+            int format = 1;
+            int byteRate = FECH * CHANNELS * FMT / 8;
+            short blockAlign = (short) (CHANNELS * FMT / 8);
+
+            // RIFF chunk
+            outStream.write("RIFF".getBytes());
+            writeLittleEndian(36 + dataChar.length, 4, outStream);
+            outStream.write("WAVE".getBytes());
+
+            // fmt sub-chunk
+            outStream.write("fmt ".getBytes());
+            writeLittleEndian(subChunk1Size, 4, outStream);
+            writeLittleEndian(format, 2, outStream);
+            writeLittleEndian(CHANNELS, 2, outStream);
+            writeLittleEndian(FECH, 4, outStream);
+            writeLittleEndian(byteRate, 4, outStream);
+            writeLittleEndian(blockAlign, 2, outStream);
+            writeLittleEndian(FMT, 2, outStream);
+
+            // data sub-chunk
+            outStream.write("data".getBytes());
+            writeLittleEndian(dataMod.length, 4, outStream);
+        } catch (IOException e) {
+            System.out.println("Could not write wave file - " + e.getMessage());
         }
     }
 
     /**
      * Write the data in the wav file
      * after normalizing its amplitude to the maximum value of the format (8 bits signed)
-     * TODO
      */
-    public void writeNormalizeWavData(){
+    public void writeNormalizeWavData() {
         try {
-            /*
-                À compléter
-            */
+            double maxVal = dataMod[0];
+            for (double v : dataMod) {
+                if (v > maxVal) maxVal = v;
+            }
+
+            double minVal = dataMod[0];
+            for (double v : dataMod) {
+                if (v < minVal) minVal = v;
+            }
+
+            double absMax = Math.max(Math.abs(maxVal), Math.abs(minVal));
+
+            double normFactor = ((1 << (FMT - 1)) - 1) / absMax;
+
+            // Normalize data
+            for (double v : dataMod) {
+                short val = (short) (v * normFactor);
+                writeLittleEndian(val, 2, outStream);
+            }
+
+
         } catch (Exception e) {
-            System.out.println("Erreur d'écriture");
+            System.out.println("Erreur d'écriture : " + e.getMessage());
         }
     }
 
@@ -153,56 +189,118 @@ public class DosSend {
      * Modulate the data to send and apply the symbol throughput via BAUDS and FECH.
      * @param bits the data to modulate
      */
-    public void modulateData(byte[] bits){
-        if (bits == null)
+    public void modulateData(byte[] bits) {
+        if (bits == null) {
             throw new IllegalArgumentException("Input bits should not be null");
+        }
 
-        duree = (double) bits.length / BAUDS;
-        dataMod = new double[(int)(duree * FECH)];
+        int bitCount = bits.length;
+        duree = (double) bitCount / BAUDS; // ajuste la durée en fonction de la fréquence de bauds
 
-        for (int i = 0; i < bits.length; i++) {
-            double timeStart = (double) i / BAUDS;
-            double timeEnd = (double) (i+1) / BAUDS;
+        dataMod = new double[(int) (duree * FECH)];
 
-            for (double t = timeStart, idx = 0; t < timeEnd; t += 1.0 / FECH, idx++) {
-                double phase = 2 * Math.PI * t * FECH;
-                if (bits[i] == 1) {
-                    phase += Math.PI;
-                }
-                dataMod[(int) idx]  = Math.sin(phase);
+        int idx = 0;
+        for (int i = 0; i < bitCount; i++) {
+            double bitDuration = 1.0 / BAUDS; // durée d'un bit (symbole)
+            double timeStart = i * bitDuration;
+            double timeEnd = (i + 1) * bitDuration;
+
+            for (double t = timeStart; t < timeEnd && idx < dataMod.length; t += 1.0 / FECH) {
+                double phase = 2 * Math.PI * t * FP;
+                double amplitude = bits[i] == 1 ? 0.5 : 0.0;
+                dataMod[idx++] = amplitude * Math.sin(phase);
             }
         }
     }
 
+    public static final double Y_AXIS_PADDING = 0.75;
 
     /**
-     * TODO
      * Display a signal in a window
-     * @param sig  the signal to display
-     * @param start the first sample to display
-     * @param stop the last sample to display
+     * @param sig The signal to display
+     * @param start The first sample to display
+     * @param stop The last sample to display
      * @param mode "line" or "point"
-     * @param title the title of the window
+     * @param title The title of the window
      */
     public static void displaySig(double[] sig, int start, int stop, String mode, String title){
-      /*
-          À compléter
-      */
+        int length = sig.length;
+        if (length == 0) {
+            return; // No need to display an empty signal
+        }
+
+        double maxVal = Arrays.stream(sig, start, stop).max().orElse(1.0);
+        double minVal = Arrays.stream(sig, start, stop).min().orElse(0.0);
+
+        double yRange = maxVal - minVal;
+        double padding = Y_AXIS_PADDING * yRange;
+
+        StdDraw.setCanvasSize(700, 500);
+        StdDraw.setXscale(start, stop - 1);
+        StdDraw.setYscale(minVal - padding, maxVal + padding);
+
+        if ("line".equals(mode)) {
+            // Draw using lines
+            for (int i = start + 1; i < stop && i < length; i++) {
+                StdDraw.line(i - 1, sig[i - 1], i, sig[i]);
+            }
+        } else {
+            // Draw using points
+            for (int i = start; i < stop && i < length; i++) {
+                StdDraw.point(i, sig[i]);
+            }
+        }
     }
 
     /**
-     * TODO
      * Display signals in a window
-     * @param listOfSigs  a list of the signals to display
-     * @param start the first sample to display
-     * @param stop the last sample to display
+     * @param listOfSigs A list of the signals to display
+     * @param start The first sample to display
+     * @param stop The last sample to display
      * @param mode "line" or "point"
-     * @param title the title of the window
+     * @param title The title of the window
      */
     public static void displaySig(List<double[]> listOfSigs, int start, int stop, String mode, String title){
-      /*
-          À compléter
-      */
+        int N = stop - start;
+
+        if (N <= 0) {
+            return; // No need to display an empty signal range
+        }
+
+        double maxVal = listOfSigs.stream()
+                .flatMapToDouble(sig -> Arrays.stream(sig, start, stop))
+                .max()
+                .orElse(1.0);
+        double minVal = listOfSigs.stream()
+                .flatMapToDouble(sig -> Arrays.stream(sig, start, stop))
+                .min()
+                .orElse(0.0);
+
+        double yRange = maxVal - minVal;
+        double padding = Y_AXIS_PADDING * yRange;
+
+        StdDraw.setCanvasSize(700, 500);
+        StdDraw.setXscale(start, stop - 1);
+        StdDraw.setYscale(minVal - padding, maxVal + padding);
+
+        int numOfSigs = listOfSigs.size();
+
+        StdDraw.setPenColor(StdDraw.BLUE);
+        for (int s = 0; s < numOfSigs; s++) {
+            double[] sig = listOfSigs.get(s);
+
+            if ("line".equals(mode)) {
+                // Draw using lines
+                for (int i = start + 1; i < stop && i < sig.length; i++) {
+                    StdDraw.line(i - 1, sig[i - 1], i, sig[i]);
+                }
+            } else {
+                // Draw using points
+                for (int i = start; i < stop && i < sig.length; i++) {
+                    StdDraw.point(i, sig[i]);
+                }
+            }
+        }
     }
 
     public static void main(String[] args) {
@@ -211,7 +309,7 @@ public class DosSend {
 
         // lit le texte à envoyer depuis l'entrée standard
         // et calcule la durée de l'audio correspondant
-        dosSend.duree = (double)(dosSend.readTextData()+dosSend.START_SEQ.length/8)*8.0/dosSend.BAUDS;
+        dosSend.duree = (double) (dosSend.readTextData() + dosSend.START_SEQ.length / 8) * 8.0 / dosSend.BAUDS;
 
         // génère le signal modulé après avoir converti les données en bits
         dosSend.modulateData(dosSend.charToBits(dosSend.dataChar));
