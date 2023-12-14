@@ -1,3 +1,4 @@
+import java.awt.*;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -8,9 +9,12 @@ import java.util.Scanner;
 
 public class DosSend {
     final int FECH = 44100; // fréquence d'échantillonnage
-    final int FP = 1000;    // fréquence de la porteuse
+    /**
+     * Fréquence de la porteuse
+     */
+    final int FP = 1000;
     final int BAUDS = 100;  // débit en symboles par seconde
-    final int FMT = 8;    // format des données
+    final int FMT = 16;    // format des données
     final int MAX_AMP = (1<<(FMT-1))-1; // amplitude max en entier
     final int CHANNELS = 1; // nombre de voies audio (1 = mono)
     final int[] START_SEQ = {1,0,1,0,1,0,1,0}; // séquence de synchro au début
@@ -167,21 +171,15 @@ public class DosSend {
             throw new IllegalArgumentException("Input character array should not be null.");
         }
 
-        StringBuilder binaryStr = new StringBuilder();
-        for (char c : chars) {
-            StringBuilder binaryChar = new StringBuilder(Integer.toBinaryString(c));
-            while (binaryChar.length() < FMT) {
-                binaryChar.insert(0, "0");
-            }
-            binaryStr.append(binaryChar);
-        }
+        byte[] bits = new byte[chars.length * FMT];
+        int bitIndex = 0;
 
-        // Converting binary string to byte array
-        byte[] byteArr = new byte[binaryStr.length()];
-        for (int i = 0; i < binaryStr.length(); i++) {
-            byteArr[i] = (byte) (binaryStr.charAt(i) == '1' ? 1 : 0);
+        for (char c: chars) {
+            for (int i = FMT - 1; i >= 0; i--) {
+                bits[bitIndex++] = (byte) ((c >> i) & 1);
+            }
         }
-        return byteArr;
+        return bits;
     }
 
 
@@ -190,25 +188,26 @@ public class DosSend {
      * @param bits the data to modulate
      */
     public void modulateData(byte[] bits) {
-        if (bits == null) {
-            throw new IllegalArgumentException("Input bits should not be null");
+        int samplesPerBit = FECH / BAUDS;
+        dataMod = new double[bits.length * samplesPerBit + START_SEQ.length];
+
+        // Ajout & Modulation de la séquence de synchronisation
+        for (int i = 0; i < START_SEQ.length; i++) {
+            if (START_SEQ[i] == 0) {
+                continue;
+            }
+            for (int j = 0; j < samplesPerBit; j++) {
+                dataMod[i * samplesPerBit + j] = (START_SEQ[i] == 1) ? Math.sin(2 * Math.PI * FP * j / FECH) * MAX_AMP : 0;
+            }
         }
 
-        int bitCount = bits.length;
-        duree = (double) bitCount / BAUDS; // ajuste la durée en fonction de la fréquence de bauds
-
-        dataMod = new double[(int) (duree * FECH)];
-
-        int idx = 0;
-        for (int i = 0; i < bitCount; i++) {
-            double bitDuration = 1.0 / BAUDS; // durée d'un bit (symbole)
-            double timeStart = i * bitDuration;
-            double timeEnd = (i + 1) * bitDuration;
-
-            for (double t = timeStart; t < timeEnd && idx < dataMod.length; t += 1.0 / FECH) {
-                double phase = 2 * Math.PI * t * FP;
-                double amplitude = bits[i] == 1 ? 0.5 : 0.0;
-                dataMod[idx++] = amplitude * Math.sin(phase);
+        // Ajout des bits composants le message
+        for (int i = 0; i < bits.length; i++) {
+            if (bits[i] == 0) {
+                continue;
+            }
+            for (int j = 0; j < samplesPerBit; j++) {
+                dataMod[i * samplesPerBit + j + START_SEQ.length] = (bits[i] == 1) ? Math.sin(2 * Math.PI * FP * j / FECH) * MAX_AMP : 0;
             }
         }
     }
@@ -229,28 +228,54 @@ public class DosSend {
             return; // No need to display an empty signal
         }
 
-        double maxVal = Arrays.stream(sig, start, stop).max().orElse(1.0);
-        double minVal = Arrays.stream(sig, start, stop).min().orElse(0.0);
+        double max = Arrays.stream(sig, start, stop).max().orElse(1.0);
+        double min = Arrays.stream(sig, start, stop).min().orElse(0.0);
 
-        double yRange = maxVal - minVal;
-        double padding = Y_AXIS_PADDING * yRange;
+        int height = 500;
+        int width  = 1000;
 
-        StdDraw.setCanvasSize(700, 500);
-        StdDraw.setXscale(start, stop - 1);
-        StdDraw.setYscale(minVal - padding, maxVal + padding);
+        StdDraw.setCanvasSize(width, height);
+        StdDraw.setXscale(0.0, width);
+        StdDraw.setYscale(min, max);
 
+        // draw min & max
+        StdDraw.text(50, max - (max / 1000 * 50), String.valueOf((int) max));
+        StdDraw.text(50, min + (Math.abs(min) / 1000 * 50),         String.valueOf((int) min));
+
+        // draw middle line with numbers
+        StdDraw.line(0, 0.0, width, 0.0);
+        double seqPeriod = stop - start;
+        for (int i = 0; i < 10; i++) {
+            int x = (width / 10) * i;
+            String n = String.valueOf((seqPeriod / 10) * i);
+
+            StdDraw.line(x, (max / 1000 * 5), x, (max / 1000 * -5));
+            StdDraw.text(x, (max / 1000 * -60), n);
+        }
+
+        // draw lines
+        double paddingRatio = 0.8;
         if ("line".equals(mode)) {
-            // Draw using lines
-            for (int i = start + 1; i < stop && i < length; i++) {
-                StdDraw.line(i - 1, sig[i - 1], i, sig[i]);
+            StdDraw.setPenColor(Color.BLUE);
+            for (int i = start; i < stop - 1; i++) {
+                double seq1 = sig[i];
+                double x1 = ((double) width / (stop - start)) * (i - start);
+
+                double seq2 = sig[i + 1];
+                double x2 = ((double) width / (stop - start)) * (i + 1 - start);
+
+                StdDraw.line(x1, seq1 * paddingRatio, x2, seq2 *paddingRatio);
             }
         } else {
-            // Draw using points
-            for (int i = start; i < stop && i < length; i++) {
-                StdDraw.point(i, sig[i]);
+            for (int i = start; i < stop; i++) {
+                double seq = sig[i];
+                double x = ((double) width / (stop - start)) * (i - start);
+
+                StdDraw.point(x, seq * paddingRatio);
             }
         }
     }
+
 
     /**
      * Display signals in a window
