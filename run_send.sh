@@ -6,4 +6,4 @@ then
   exit 1
 fi
 
-javac DosSend.java && java DosSend < ./helloWorld.txt
+javac DosSend.java && java DosSend

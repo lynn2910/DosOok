@@ -1,5 +1,7 @@
+import java.awt.*;
 import java.io.*;
 import java.util.Arrays;
+
 
 public class DosRead {
     static final int FP = 1000;
@@ -13,7 +15,6 @@ public class DosRead {
     int[] outputBits;
     char[] decodedChars;
 
-
     /**
      * Constructor that opens the FIlEInputStream
      * and reads sampleRate, bitsPerSample and dataSize
@@ -26,22 +27,18 @@ public class DosRead {
             fileInputStream= new FileInputStream(path);
             fileInputStream.read(header);
 
-            // Read the sample rate (offset: 24, format: 32 bits)
+            // Read the sample rate (offset 24, 4 bytes)
             sampleRate = byteArrayToInt(header, 24, 32);
-
-            // Read the bits per sample (offset: 34, format: 16 bits)
+            // Read the number of bits per sample (offset 34, 2 bytes)
             bitsPerSample = byteArrayToInt(header, 34, 16);
-
-            // Read the data size (offset: 40, format: 32 bits)
+            // Read the size of the data (offset 40, 4 bytes)
             dataSize = byteArrayToInt(header, 40, 32);
-
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
-
 
     /**
      * Helper method to convert a little-endian byte array to an integer
@@ -61,7 +58,6 @@ public class DosRead {
         else return (bytes[offset] & 0xFF);
     }
 
-
     /**
      * Read the audio data from the wav file
      * and convert it to an array of doubles
@@ -72,40 +68,33 @@ public class DosRead {
         try {
             fileInputStream.read(audioData);
 
-            // Assuming 16 bits per sample, convert audioData to an array of doubles
-            audio = new double[dataSize / 2]; // 2 bytes per sample for 16 bits
+            // Crée un tableau de doubles appelé audio pour stocker les valeurs normalisées des échantillons audio.
+            // La taille du tableau est déterminée en fonction du nombre d'octets par échantillon (bitsPerSample / 8)
+            // et de la taille totale des données audio dans audioData.
+            audio = new double[audioData.length / (bitsPerSample / 8)];
 
-            for (int i = 0, j = 0; i < dataSize; i += 2, j++) {
-                // Convert two bytes to a 16-bit signed integer
-                int sample = byteArrayToInt(audioData, i, 16);
+            for (int i = 0; i < audio.length; i++) {
+                int byteFaible = audioData[2 * i];
+                int byteFort = audioData[2 * i + 1];
 
-                // Normalize the 16-bit integer to a double in the range [-1.0, 1.0]
-                audio[j] = sample / 32768.0;
+                int echantillon = (byteFort << 8) | (byteFaible & 255); // Composition un échantillon sur 16 bits
+                audio[i] = echantillon / 32768.0; // Normalise l'échantillon sur [-1, 1]
             }
-
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println("Erreur de lecture des données audio: " + e.getMessage());
         }
     }
-
 
     /**
      * Reverse the negative values of the audio array
      */
-    public void audioRectifier() {
-        if (audio != null) {
-            for (int i = 0; i < audio.length; i++) {
-                // Reverse the sign of the audio signal for negative values
-                if (audio[i] < 0) {
-                    audio[i] = -audio[i];
-                }
+    public void audioRectifier(){
+        for (int i = 0; i < audio.length; i++) {
+            if (audio[i] < 0) {
+                audio[i] = -audio[i];
             }
-        } else {
-            // Handle the case where the 'audio' array is not initialized
-            System.err.println("Audio array is not initialized. Call readAudioDouble() first.");
         }
     }
-
 
     /**
      * Apply a low pass filter to the audio array
@@ -113,29 +102,10 @@ public class DosRead {
      * @param n the number of samples to average
      */
     public void audioLPFilter(int n) {
-        if (audio != null) {
-            double[] filteredAudio = new double[audio.length];
-
-            for (int i = 0; i < audio.length; i++) {
-                double sum = 0.0;
-
-                // Calculate the average of the previous 'n' samples
-                for (int j = Math.max(0, i - n + 1); j <= i; j++) {
-                    sum += audio[j];
-                }
-
-                // Apply the low pass filter to the current sample
-                filteredAudio[i] = sum / Math.min(n, i + 1);
-            }
-
-            // Copy the filtered audio back to the original array
-            System.arraycopy(filteredAudio, 0, audio, 0, audio.length);
-        } else {
-            // Handle the case where the 'audio' array is not initialized
-            System.err.println("Audio array is not initialized. Call readAudioDouble() first.");
-        }
+        /*
+            À compléter
+        */
     }
-
 
     /**
      * Resample the audio array and apply a threshold
@@ -143,30 +113,10 @@ public class DosRead {
      * @param threshold the threshold that separates 0 and 1
      */
     public void audioResampleAndThreshold(int period, int threshold){
-        if (audio != null) {
-            int outputSize = audio.length / period;
-            outputBits = new int[outputSize];
-
-            for (int i = 0; i < outputSize; i++) {
-                double sum = 0.0;
-
-                // Calculate the average of 'period' samples
-                for (int j = i * period; j < (i + 1) * period; j++) {
-                    sum += audio[j];
-                }
-
-                // Calculate the average value for the current symbol
-                double average = sum / period;
-
-                // Apply threshold and determine the output bit
-                outputBits[i] = (average > (threshold * FP)) ? 1 : 0;
-            }
-        } else {
-            // Handle the case where the 'audio' array is not initialized
-            System.err.println("Audio array is not initialized. Call readAudioDouble() first.");
-        }
+      /*
+        À compléter
+      */
     }
-
 
     /**
      * Decode the outputBits array to a char array
@@ -174,71 +124,9 @@ public class DosRead {
      * The next first symbol is the first bit of the first char.
      */
     public void decodeBitsToChar(){
-        if (outputBits != null) {
-            // Find the index where the START_SEQ begins
-            System.out.println("Output Bits: " + Arrays.toString(outputBits));
-            int startIndex = findStartSequence(outputBits, START_SEQ);
-
-            if (startIndex != -1) {
-                // Calculate the number of symbols to decode
-                int symbolsToDecode = (outputBits.length - startIndex) / 8;
-
-                decodedChars = new char[symbolsToDecode];
-
-                for (int i = 0; i < symbolsToDecode; i++) {
-                    // Initialize the decoded char with the first bit of the symbol
-                    char decodedChar = (char) (outputBits[startIndex + i * 8] + '0');
-
-                    // Add the remaining 7 bits to the decoded char
-                    for (int j = 1; j < 8; j++) {
-                        decodedChar = (char) ((decodedChar << 1) | outputBits[startIndex + i * 8 + j]);
-                    }
-
-                    // Store the decoded char in the array
-                    decodedChars[i] = decodedChar;
-                }
-            } else {
-                System.err.println("Start sequence not found.");
-            }
-        } else {
-            // Handle the case where the 'outputBits' array is not initialized
-            System.err.println("Output bits array is not initialized. Call audioResampleAndThreshold first.");
-        }
-    }
-
-
-    /**
-     * Check if the specified subarray of the array starts with the given sequence
-     *
-     * @param array    the array to check
-     * @param start    the starting index of the subarray
-     * @param sequence the sequence to check
-     * @return true if the subarray starts with the sequence, false otherwise
-     */
-    private boolean startsWithSequence(int[] array, int start, int[] sequence) {
-        for (int i = 0; i < sequence.length; i++) {
-            if (array[start + i] != sequence[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-
-    /**
-     * Find the index where the specified sequence begins in the array
-     *
-     * @param array    the array to search
-     * @param sequence the sequence to find
-     * @return the index where the sequence begins, or -1 if not found
-     */
-    private int findStartSequence(int[] array, int[] sequence) {
-        for (int i = 0; i < array.length - sequence.length + 1; i++) {
-            if (startsWithSequence(array, i, sequence)) {
-                return i;
-            }
-        }
-        return -1;
+      /*
+        À compléter
+      */
     }
 
     /**
@@ -246,21 +134,19 @@ public class DosRead {
      * @param data the array to print
      */
     public static void printIntArray(char[] data) {
-        for (char c : data) {
-            System.out.print(c);
-        }
-        System.out.println(); // Ajoutez une nouvelle ligne à la fin pour plus de lisibilité
+      /*
+        À compléter
+      */
     }
 
-    public static final double Y_AXIS_PADDING = 0.75;
 
     /**
      * Display a signal in a window
-     * @param sig  the signal to display
-     * @param start the first sample to display
-     * @param stop the last sample to display
+     * @param sig The signal to display
+     * @param start The first sample to display
+     * @param stop The last sample to display
      * @param mode "line" or "point"
-     * @param title the title of the window
+     * @param title The title of the window
      */
     public static void displaySig(double[] sig, int start, int stop, String mode, String title){
         int length = sig.length;
@@ -268,28 +154,53 @@ public class DosRead {
             return; // No need to display an empty signal
         }
 
-        double maxVal = Arrays.stream(sig, start, stop).max().orElse(1.0);
-        double minVal = Arrays.stream(sig, start, stop).min().orElse(0.0);
+        double max = Arrays.stream(sig, start, stop).max().orElse(1.0);
 
-        double yRange = maxVal - minVal;
-        double padding = Y_AXIS_PADDING * yRange;
+        int height = 500;
+        int width  = 1000;
 
-        StdDraw.setCanvasSize(700, 500);
-        StdDraw.setXscale(start, stop - 1);
-        StdDraw.setYscale(minVal - padding, maxVal + padding);
+        StdDraw.setCanvasSize(width, height);
+        StdDraw.setXscale(0.0, width);
+        StdDraw.setYscale(-max, max);
 
+        // draw min & max
+        StdDraw.text(50, max - (max / 1000 * 50), String.valueOf((int) max));
+        StdDraw.text(50, -max + (max / 1000 * 50),         String.valueOf((int) -max));
+
+        // draw middle line with numbers
+        StdDraw.line(0, 0.0, width, 0.0);
+        double seqPeriod = stop - start;
+        for (int i = 0; i < 10; i++) {
+            int x = (width / 10) * i;
+            String n = String.valueOf((int) ((seqPeriod / 10) * i));
+
+            StdDraw.line(x, (max / 1000 * 5), x, (max / 1000 * -5));
+            StdDraw.text(x, (max / 1000 * -60), n);
+        }
+
+        // draw lines
+        double paddingRatio = 0.8;
         if ("line".equals(mode)) {
-            // Draw using lines
-            for (int i = start + 1; i < stop && i < length; i++) {
-                StdDraw.line(i - 1, sig[i - 1], i, sig[i]);
+            StdDraw.setPenColor(Color.BLUE);
+            for (int i = start; i < stop - 1; i++) {
+                double seq1 = sig[i];
+                double x1 = ((double) width / (stop - start)) * (i - start);
+
+                double seq2 = sig[i + 1];
+                double x2 = ((double) width / (stop - start)) * (i + 1 - start);
+
+                StdDraw.line(x1, seq1 * paddingRatio, x2, seq2 *paddingRatio);
             }
         } else {
-            // Draw using points
-            for (int i = start; i < stop && i < length; i++) {
-                StdDraw.point(i, sig[i]);
+            for (int i = start; i < stop; i++) {
+                double seq = sig[i];
+                double x = ((double) width / (stop - start)) * (i - start);
+
+                StdDraw.point(x, seq * paddingRatio);
             }
         }
     }
+
 
     /**
      *  Un exemple de main qui doit pourvoir être exécuté avec les méthodes
@@ -306,9 +217,6 @@ public class DosRead {
         DosRead dosRead = new DosRead();
         dosRead.readWavHeader(wavFilePath);
 
-        // TODO
-        System.out.println("Audio avant traitement : " + Arrays.toString(audio));
-
         // Print the audio data properties
         System.out.println("Fichier audio: " + wavFilePath);
         System.out.println("\tSample Rate: " + dosRead.sampleRate + " Hz");
@@ -319,21 +227,10 @@ public class DosRead {
         dosRead.readAudioDouble();
         // reverse the negative values
         dosRead.audioRectifier();
-
-        // TODO
-        System.out.println("Audio après redressement : " + Arrays.toString(audio));
-
         // apply a low pass filter
         dosRead.audioLPFilter(44);
-
-        // TODO
-        System.out.println("Audio après filtrage passe-bas : " + Arrays.toString(audio));
-
         // Resample audio data and apply a threshold to output only 0 & 1
-        dosRead.audioResampleAndThreshold(dosRead.sampleRate/BAUDS, 10000 );
-
-        // TODO
-        System.out.println("Output Bits : " + Arrays.toString(outputBits));
+        dosRead.audioResampleAndThreshold(dosRead.sampleRate/BAUDS, 12000 );
 
         dosRead.decodeBitsToChar();
         if (dosRead.decodedChars != null){
