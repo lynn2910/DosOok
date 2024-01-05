@@ -114,24 +114,12 @@ public class DosSend {
      * Read the text data to encode and store them into dataChar
      * @return the number of characters read
      */
-    public int readTextData(){
-        // On crée un StringBuilder qui va permettre de reconstituer le texte complet fourni en entrée
-        StringBuilder text = new StringBuilder();
-
-        // On reconstitue le texte entré
-        while (input.hasNextLine()) {
-            String l = input.nextLine();
-
-            // On ajoute dans la liste chaque caractère de la ligne
-            for (char c: l.toCharArray()) text.append(c);
-            // S'il y a encore une ligne après, on ajoute un saut de ligne
-            if (input.hasNextLine())
-                text.append("\r\n");
+    public int readTextData() {
+        if (System.console() != null) {
+            // Aucune redirection d'entrée, lire depuis la saisie standard
+            System.out.print("Quel est votre message: ");
         }
-
-        // Finalement, on enregistre le texte dans dataChar
-        this.dataChar = text.toString().toCharArray();
-
+        this.dataChar = input.nextLine().trim().toCharArray();
         return this.dataChar.length;
     }
 
@@ -159,11 +147,6 @@ public class DosSend {
                 bits[i * FMT + j] = (byte) bit;
             }
         }
-
-        // T ODO retirer ça, ce n'est utile que pour avoir la bonne séquence binaire
-//        System.out.print("Sequence binaire: ");
-//        for (byte bit : bits) System.out.print(bit);
-//        System.out.println();
 
         return bits;
     }
