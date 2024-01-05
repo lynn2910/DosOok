@@ -157,8 +157,6 @@ public class DosRead {
             // Nous enregistrons le bit s'il n'est pas dans la séquence de début.
             if (i > START_SEQ.length)
                 outputBits[i - START_SEQ.length] = (int) bit;
-            else if (bit != START_SEQ[i])
-                throw new IllegalStateException("The binary sequence doesn't start with the START_SEQ.");
 
             // Finalement, nous allons repasser une dernière fois dans cette partie de l'audio
             // et, si nous sommes au milieu de la partie, nous allons enregistrer le bit dans l'audio, sinon ce sera 0
