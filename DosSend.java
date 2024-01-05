@@ -8,17 +8,17 @@ import java.util.Scanner;
 
 
 public class DosSend {
-    final int FECH = 44100; // fréquence d'échantillonnage
+    static final int FECH = 44100; // fréquence d'échantillonnage
     /**
      * Fréquence de la porteuse
      */
-    final int FP = 1000;
-    final int BAUDS = 100;  // débit en symboles par seconde
-    final int FMT = 16;    // format des données
-    final int MAX_AMP = (1<<(FMT-1))-1; // amplitude max en entier
-    final int CHANNELS = 1; // nombre de voies audio (1 = mono)
-    final int[] START_SEQ = {1,0,1,0,1,0,1,0}; // séquence de synchro au début
-    final Scanner input = new Scanner(System.in); // pour lire le fichier texte
+    static final int FP = 1000;
+    static final int BAUDS = 100;  // débit en symboles par seconde
+    static final int FMT = 16;    // format des données
+    static final int MAX_AMP = (1<<(FMT-1))-1; // amplitude max en entier
+    static final int CHANNELS = 1; // nombre de voies audio (1 = mono)
+    static final int[] START_SEQ = {1,0,1,0,1,0,1,0}; // séquence de synchro au début
+    static final Scanner input = new Scanner(System.in); // pour lire le fichier texte
 
     long taille;                // nombre d'octets de données à transmettre
     double duree ;              // durée de l'audio
@@ -96,11 +96,14 @@ public class DosSend {
      */
     public void writeNormalizeWavData() {
         try {
-            double maxAmplitude = Arrays.stream(dataMod).max().orElse(1.0);
-            for (double sample: dataMod) {
-                int normalizedSample = (int) ((sample / maxAmplitude) * MAX_AMP);
-                writeLittleEndian(normalizedSample, FMT / 8, outStream);
-            }
+            // On calcule sur combien d'octets sera encodé chaque échantillon
+            // En divisant FMT (nombre de bits par caractère) par 8 permet d'obtenir le nombre d'octets dans 8.
+            int sampleSize = FMT / 8;
+
+            // On écrit toutes les séquences normalisées
+            for (double sample: dataMod)
+                writeLittleEndian((int) sample, sampleSize, outStream);
+
             outStream.close();
         } catch (Exception e) {
             System.out.println("Erreur d'écriture : " + e.getMessage());
@@ -112,34 +115,24 @@ public class DosSend {
      * @return the number of characters read
      */
     public int readTextData(){
-        if (this.dataChar == null) {
-            this.dataChar = new char[0];
-        }
+        // On crée un StringBuilder qui va permettre de reconstituer le texte complet fourni en entrée
+        StringBuilder text = new StringBuilder();
 
-        int charCount = 0;
-        while (input.hasNext()) {
+        // On reconstitue le texte entré
+        while (input.hasNextLine()) {
             String l = input.nextLine();
-            int lLength = l.length();
-            charCount += lLength;
 
-            // Count the newline character if it's not the last line
-            if (input.hasNext()) {
-                charCount++;
-            }
-
-            char[] dataCharNew = new char[dataChar.length + lLength + 1];
-            System.arraycopy(dataChar, 0, dataCharNew, 0, dataChar.length);
-            l.getChars(0, lLength, dataCharNew, dataChar.length);
-
-            // Add a newline character if it's not the last line
-            if (input.hasNext()) {
-                dataCharNew[dataChar.length + lLength] = '\n';
-            }
-
-            dataChar = dataCharNew;
+            // On ajoute dans la liste chaque caractère de la ligne
+            for (char c: l.toCharArray()) text.append(c);
+            // S'il y a encore une ligne après, on ajoute un saut de ligne
+            if (input.hasNextLine())
+                text.append("\r\n");
         }
 
-        return charCount;
+        // Finalement, on enregistre le texte dans dataChar
+        this.dataChar = text.toString().toCharArray();
+
+        return this.dataChar.length;
     }
 
     /**
@@ -148,17 +141,30 @@ public class DosSend {
      * @return byte array containing only 0 & 1
      */
     public byte[] charToBits(char[] chars) {
-        if(chars == null) {
+        if(chars == null)
             throw new IllegalArgumentException("Input character array should not be null.");
-        }
 
+        // On définit une list de 0 dont la taille est le nombre de caractères multipliés par le nombre de bits réservés pour chaque caractère
+        // Cette list contiendra la séquence binaire totale
         byte[] bits = new byte[chars.length * FMT];
 
+        // Nous parcourons chaque caractère
         for (int i = 0; i < chars.length; i++) {
+            // Pour chaque caractère, on part de 0 et on itère jusqu'à FMT - 1 (compris).
+            // À chaque itération, 'j' est le bit que nous allons enregistrer.
             for (int j = 0; j < FMT; j++) {
-                bits[i * FMT + j] = (byte) (chars[i] >> j & 1);
+                // On récupère le bit à l'indice 'j' et on effectue un complément à 1.
+                int bit = (chars[i] >> j) & 1;
+                // On enregistre l'indice
+                bits[i * FMT + j] = (byte) bit;
             }
         }
+
+        // T ODO retirer ça, ce n'est utile que pour avoir la bonne séquence binaire
+//        System.out.print("Sequence binaire: ");
+//        for (byte bit : bits) System.out.print(bit);
+//        System.out.println();
+
         return bits;
     }
 
@@ -168,29 +174,41 @@ public class DosSend {
      * @param bits the data to modulate
      */
     public void modulateData(byte[] bits) {
+        // On calcule le nombre d'échantillons par symbole et le nombre d'échantillons totaux
         int samplesPerSymbol = FECH / BAUDS;
         int totalSample = (int) (duree * FECH);
 
+        // On définit dataMod comme une list composée de 0 et de taille totalSample, soit le nombre d'échantillons
         dataMod = new double[totalSample];
 
         int sampleIndex = 0;
-
+        // On parcourt chaque bit de la séquence de départ
         for (int seqBit: START_SEQ) {
-            int amplitude = seqBit == 1 ? MAX_AMP : 0;
-            for (int i = 0; i < samplesPerSymbol && sampleIndex < totalSample; i++) {
-                dataMod[sampleIndex++] = amplitude * Math.sin(2 * Math.PI * FP * i / FECH);
+            if (seqBit == 0) {
+                // si le bit est à 0, on n'a pas besoin d'écrire nos échantillons
+                // On ajoute à notre index le nombre d'échantillons pour un bit
+                sampleIndex += samplesPerSymbol;
+            } else {
+                // Sinon, on va itérer de 0 au nombre de symboles par bit
+                for (int i = 0; i < samplesPerSymbol; i++) {
+                    dataMod[sampleIndex++] = MAX_AMP * Math.sin(2 * Math.PI * FP * i / FECH);
+                }
             }
         }
 
+        // Nous effectuons la même opération que précédemment pour la séquence binaire
         for (byte bit: bits){
-            int amplitude = bit == 1 ? MAX_AMP : 0;
-            for (int i = 0; i < samplesPerSymbol && sampleIndex < totalSample; i++) {
-                dataMod[sampleIndex++] = amplitude * Math.sin(2 * Math.PI * FP * i / FECH);
+            if (bit == 0) {
+                sampleIndex += samplesPerSymbol;
+            } else {
+                for (int i = 0; i < samplesPerSymbol; i++) {
+                    dataMod[sampleIndex++] = MAX_AMP * Math.sin(2 * Math.PI * FP * i / FECH);
+                }
             }
         }
     }
 
-    public static final double Y_AXIS_PADDING = 0.75;
+    static final double Y_AXIS_PADDING = 0.75;
 
     /**
      * Display a signal in a window
@@ -201,6 +219,8 @@ public class DosSend {
      * @param title The title of the window
      */
     public static void displaySig(double[] sig, int start, int stop, String mode, String title){
+        StdDraw.setTitle(title);
+
         int length = sig.length;
         if (length == 0) {
             return; // No need to display an empty signal
@@ -222,7 +242,7 @@ public class DosSend {
 
         // draw middle line with numbers
         StdDraw.line(0, 0.0, width, 0.0);
-        double seqPeriod = stop - start;
+        double seqPeriod = (double) stop - (double) start;
         for (int i = 0; i < 10; i++) {
             int x = (width / 10) * i;
             String n = String.valueOf((seqPeriod / 10) * i);
@@ -254,7 +274,6 @@ public class DosSend {
         }
     }
 
-
     /**
      * Display signals in a window
      * @param listOfSigs A list of the signals to display
@@ -264,9 +283,10 @@ public class DosSend {
      * @param title The title of the window
      */
     public static void displaySig(List<double[]> listOfSigs, int start, int stop, String mode, String title){
-        int N = stop - start;
+        StdDraw.setTitle(title);
+        int n = stop - start;
 
-        if (N <= 0) {
+        if (n <= 0) {
             return; // No need to display an empty signal range
         }
 
@@ -311,8 +331,8 @@ public class DosSend {
         DosSend dosSend = new DosSend("DosOok_message.wav");
 
         // lit le texte à envoyer depuis l'entrée standard
-        // et calcule la durée de l'audio correspondant
-        dosSend.duree = (double) (dosSend.readTextData() + dosSend.START_SEQ.length / 8) * 8.0 / dosSend.BAUDS;
+        // et calcule la durée de l'audio correspondant selon le nombre de bits réservés à chaque caractère
+        dosSend.duree = (dosSend.readTextData() + START_SEQ.length / (double) FMT) * FMT / BAUDS;
 
         // génère le signal modulé après avoir converti les données en bits
         dosSend.modulateData(dosSend.charToBits(dosSend.dataChar));
@@ -334,5 +354,4 @@ public class DosSend {
         // exemple d'affichage du signal modulé dans une fenêtre graphique
         displaySig(dosSend.dataMod, 1000, 3000, "line", "Signal modulé");
     }
-
 }

@@ -1,7 +1,5 @@
 import java.awt.*;
 import java.io.*;
-import java.util.Arrays;
-
 
 public class DosRead {
     static final int FP = 1000;
@@ -22,7 +20,7 @@ public class DosRead {
      * @param path the path of the wav file to read
      */
     public void readWavHeader(String path){
-        byte[] header = new byte[44]; // The header is 44 bytes long
+        byte[] header = new byte[44]; // La tête fait 44 bits de longueur
         try {
             fileInputStream= new FileInputStream(path);
             fileInputStream.read(header);
@@ -65,6 +63,7 @@ public class DosRead {
      */
     public void readAudioDouble() {
         byte[] audioData = new byte[dataSize];
+        double max = Math.pow(2, bitsPerSample - 1);
         try {
             fileInputStream.read(audioData);
 
@@ -78,7 +77,7 @@ public class DosRead {
                 int byteFort = audioData[2 * i + 1];
 
                 int echantillon = (byteFort << 8) | (byteFaible & 255); // Composition un échantillon sur 16 bits
-                audio[i] = echantillon / 32768.0; // Normalise l'échantillon sur [-1, 1]
+                audio[i] = echantillon / max; // Normalise l'échantillon sur [-1, 1]
             }
         } catch (IOException e) {
             System.out.println("Erreur de lecture des données audio: " + e.getMessage());
@@ -89,10 +88,14 @@ public class DosRead {
      * Reverse the negative values of the audio array
      */
     public void audioRectifier(){
+        // Nous parcourons chaque fréquence dans l'audio
         for (int i = 0; i < audio.length; i++) {
-            if (audio[i] < 0) {
+            // Nous transformons les fréquences négatives en fréquences positives.
+            // Nous n'avons pas utilisé Math.abs car cette méthode requiert de réécrire tous les éléments du tableau.
+            // Ainsi, nous avons pris la décision de privilégier l'utilisation d'une condition, permettant d'économiser
+            // des opérations d'écritures en mémoire.
+            if (audio[i] < 0)
                 audio[i] = -audio[i];
-            }
         }
     }
 
@@ -102,20 +105,69 @@ public class DosRead {
      * @param n the number of samples to average
      */
     public void audioLPFilter(int n) {
-        /*
-            À compléter
-        */
+        // On doit être sûr que n est un nombre entier strictement positif.
+        if (n <= 0)
+            throw new IllegalArgumentException("Number of samples (n) must be greater than 0");
+
+        // On crée un tableau qui contiendra notre audio filtré
+        double[] filteredAudio = new double[audio.length];
+
+        // Nous appliquons le filtre passe-bas
+        for (int i = n - 1; i < audio.length; i++) {
+            // On calcule la somme des fréquences audio pour cette partie
+            double sum = 0;
+            for (int j = 0; j < n; j++)
+                sum += audio[i - j];
+
+            // On n'a plus qu'à enregistrer dans notre liste la moyenne
+            filteredAudio[i] = sum / n;
+        }
+
+        // Copy the filtered audio back to the original array
+        System.arraycopy(filteredAudio, 0, audio, 0, audio.length);
     }
+
 
     /**
      * Resample the audio array and apply a threshold
-     * @param period the number of audio samples by symbol
+     * @param period    the number of audio samples by symbol
      * @param threshold the threshold that separates 0 and 1
      */
-    public void audioResampleAndThreshold(int period, int threshold){
-      /*
-        À compléter
-      */
+    public void audioResampleAndThreshold(int period, int threshold) {
+        double[] resampledAudio = new double[audio.length / period];
+
+        // Cette liste contiendra les bits obtenus par l'algorithme.
+        outputBits = new int[resampledAudio.length - START_SEQ.length + 1];
+
+        // Nous calculons la fréquence maximale.
+        int max = (int) (Math.pow(2, bitsPerSample));
+
+        for (int i = 0; i < resampledAudio.length; i++) {
+            // Nous calculons la somme des fréquences audio
+            double sum = 0.0;
+            for (int j = 0; j < period; j++)
+                sum += audio[i * period + j];
+
+            // L'opération (sum / period) permet d'exprimer un pourcentage sur [0, 1]
+            // Avec ce pourcentage, nous calculons la fréquence moyenne réelle pour cette section en multipliant par la
+            // fréquence maximale.
+            // Cette fréquence moyenne réelle permet de déterminer le bot à cet emplacement.
+            double bit = max * (sum / period) > threshold ? 1 : 0;
+
+            // Nous enregistrons le bit s'il n'est pas dans la séquence de début.
+            if (i > START_SEQ.length)
+                outputBits[i - START_SEQ.length] = (int) bit;
+            else if (bit != START_SEQ[i])
+                throw new IllegalStateException("The binary sequence doesn't start with the START_SEQ.");
+
+            // Finalement, nous allons repasser une dernière fois dans cette partie de l'audio
+            // et, si nous sommes au milieu de la partie, nous allons enregistrer le bit dans l'audio, sinon ce sera 0
+            // Cela permet de n'avoir plus que des petits bâtons représentant nos bits quand ils sont à 1.
+            for (int j = 0; j < period; j++)
+                // SonarLint affirme qu'il y a une "perte" de l'information, car on fait une division avec des nombres entiers.
+                // Cependant, si nous utilisons des nombres à virgules, nous perdons l'objectif de cette condition.
+                audio[i * period + j] = (j / 2 == period / 2) ? bit * (max / 2.0) : 0;
+        }
     }
 
     /**
@@ -123,10 +175,48 @@ public class DosRead {
      * The decoding is done by comparing the START_SEQ with the actual beginning of outputBits.
      * The next first symbol is the first bit of the first char.
      */
-    public void decodeBitsToChar(){
-      /*
-        À compléter
-      */
+    public void decodeBitsToChar() {
+        // Cette condition a pour objectif de ne pas avoir de mauvaises surprises en ayant un nombre de bits incomplet
+        // ou de ne pas avoir de bits du tout.
+        if (outputBits == null || outputBits.length % bitsPerSample != 0) {
+            throw new IllegalArgumentException("Invalid outputBits array.");
+        }
+
+        // Nous définissons `decodedChars` comme un tableau de caractères vides et dont la longueur
+        // est le nombre de bits divisé par le nombre de bits par caractère.
+        // Cette opération est "safe" grâce à la pré-condition ci-dessus, nous sommes d'obtenir un nombre entier.
+        this.decodedChars = new char[outputBits.length / bitsPerSample];
+
+        // Parcourir la séquence binaire en groupes de `bitsPerSample` bits
+        for (int i = 0; i < outputBits.length; i += bitsPerSample) {
+            // Nous reconstruisons la séquence binaire pour ce caractère
+            int seqSum = getSeqSum(i);
+
+            // Finalement, nous stockons le caractère décodé dans la liste `decodedChars`
+            decodedChars[i / bitsPerSample] = (char) seqSum;
+        }
+    }
+
+    /**
+     * Convert a group of bits to a char
+     * @param i the index of the first bit of the group
+     * @return the char value of the group
+     *
+     * @implNote Cette méthode a été ajoutée afin de simplifier la méthode `decodeBitsToChar`
+     */
+    private int getSeqSum(int i) {
+        StringBuilder bitsGroup = new StringBuilder();
+        for (int j = 0; j < bitsPerSample; j++)
+            bitsGroup.append(outputBits[i + j]);
+
+        // Convertir le groupe de bits en une liste de caractères
+        char[] seqChars = bitsGroup.toString().toCharArray();
+
+        int seqSum = 0;
+        for (int j = 0; j < seqChars.length; j++) {
+            seqSum += seqChars[j] == '0' ? 0 : (int) Math.pow(2, j);
+        }
+        return seqSum;
     }
 
     /**
@@ -134,11 +224,11 @@ public class DosRead {
      * @param data the array to print
      */
     public static void printIntArray(char[] data) {
-      /*
-        À compléter
-      */
+        for (char c : data) {
+            System.out.print(c);
+        }
+        System.out.println();
     }
-
 
     /**
      * Display a signal in a window
@@ -149,12 +239,16 @@ public class DosRead {
      * @param title The title of the window
      */
     public static void displaySig(double[] sig, int start, int stop, String mode, String title){
+        StdDraw.setTitle(title);
+
         int length = sig.length;
         if (length == 0) {
             return; // No need to display an empty signal
         }
 
-        double max = Arrays.stream(sig, start, stop).max().orElse(1.0);
+        double max = sig[0];
+        for (double s: sig)
+            if (s > max) max = s;
 
         int height = 500;
         int width  = 1000;
@@ -169,7 +263,7 @@ public class DosRead {
 
         // draw middle line with numbers
         StdDraw.line(0, 0.0, width, 0.0);
-        double seqPeriod = stop - start;
+        double seqPeriod = (double) stop - (double) start;
         for (int i = 0; i < 10; i++) {
             int x = (width / 10) * i;
             String n = String.valueOf((int) ((seqPeriod / 10) * i));
@@ -201,7 +295,6 @@ public class DosRead {
         }
     }
 
-
     /**
      *  Un exemple de main qui doit pourvoir être exécuté avec les méthodes
      * que vous aurez conçues.
@@ -230,7 +323,7 @@ public class DosRead {
         // apply a low pass filter
         dosRead.audioLPFilter(44);
         // Resample audio data and apply a threshold to output only 0 & 1
-        dosRead.audioResampleAndThreshold(dosRead.sampleRate/BAUDS, 12000 );
+        dosRead.audioResampleAndThreshold(dosRead.sampleRate/BAUDS, 20000 );
 
         dosRead.decodeBitsToChar();
         if (dosRead.decodedChars != null){
