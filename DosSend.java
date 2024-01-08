@@ -84,7 +84,7 @@ public class DosSend {
 
             // data sub-chunk
             outStream.write("data".getBytes());
-            writeLittleEndian((int) nbBytes - 44, 4, outStream);
+            writeLittleEndian((int) nbBytes, 4, outStream);
         } catch (IOException e) {
             System.out.println("Could not write wave file - " + e.getMessage());
         }
