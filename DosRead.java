@@ -330,7 +330,7 @@ public class DosRead {
         dosRead.audioRectifier();
         // apply a low pass filter
         dosRead.audioLPFilter(44);
-//        // Resample audio data and apply a threshold to output only 0 & 1
+        // Resample audio data and apply a threshold to output only 0 & 1
         dosRead.audioResampleAndThreshold(dosRead.sampleRate/BAUDS, 20000);
 
         dosRead.decodeBitsToChar();

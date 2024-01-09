@@ -1,3 +1,5 @@
+package lp_filter;
+
 public class LPFilter1 {
     public double[] lpFilter(double[] inputSignal, double sampleFreq, double cutoffFreq) {
         double rc = 1.0 / (cutoffFreq * 2 * Math.PI);
