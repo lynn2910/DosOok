@@ -8,21 +8,54 @@ import java.util.Scanner;
 
 
 public class DosSend {
+    /**
+     * Fréquence d'échantillonnage
+     */
     static final int FECH = 44100; // fréquence d'échantillonnage
     /**
      * Fréquence de la porteuse
      */
     static final int FP = 1000;
+    /**
+     * Débit en symboles par seconde
+     */
     static final int BAUDS = 100;  // débit en symboles par seconde
+    /**
+     * Format des données
+     */
     static final int FMT = 16;    // format des données
+    /**
+     * Amplitude maximale
+     */
     static final int MAX_AMP = (1<<(FMT-1))-1; // amplitude max en entier
+    /**
+     * Nombre de voies audio
+     */
     static final int CHANNELS = 1; // nombre de voies audio (1 = mono)
+    /**
+     * Séquence de synchro au début
+     */
     static final int[] START_SEQ = {1,0,1,0,1,0,1,0}; // séquence de synchro au début
+    /**
+     * Scanner pour lire le fichier texte
+     */
     static final Scanner input = new Scanner(System.in); // pour lire le fichier texte
 
+    /**
+     * Nombre d'octets de données à transmettre
+     */
     long taille;                // nombre d'octets de données à transmettre
+    /**
+     * Durée de l'audio
+     */
     double duree ;              // durée de l'audio
+    /**
+     * Données modulées
+     */
     double[] dataMod;           // données modulées
+    /**
+     * Données en char
+     */
     char[] dataChar;            // données en char
 
     FileOutputStream outStream; // flux de sortie pour le fichier .wav
@@ -309,6 +342,11 @@ public class DosSend {
         }
     }
 
+    /**
+     * Main function
+     *
+     * @param args The arguments passed to the program
+     */
     public static void main(String[] args) {
         // créé un objet DosSend
         DosSend dosSend = new DosSend("DosOok_message.wav");

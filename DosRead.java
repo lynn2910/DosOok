@@ -3,8 +3,17 @@ import java.io.*;
 import java.util.Arrays;
 
 public class DosRead {
+    /**
+     * Fréquence de la porteuse
+     */
     static final int FP = 1000;
+    /**
+     * Débit en symboles par seconde
+     */
     static final int BAUDS = 100;
+    /**
+     * Séquence de départ
+     */
     static final int[] START_SEQ = {1,0,1,0,1,0,1,0};
     FileInputStream fileInputStream;
     int sampleRate = 44100;
