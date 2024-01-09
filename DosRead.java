@@ -15,12 +15,33 @@ public class DosRead {
      * Séquence de départ
      */
     static final int[] START_SEQ = {1,0,1,0,1,0,1,0};
+    /**
+     * Fichier audio
+     */
     FileInputStream fileInputStream;
+    /**
+     * Fréquence d'échantillonnage
+     */
     int sampleRate = 44100;
+    /**
+     * Nombre de bits par échantillon
+     */
     int bitsPerSample;
+    /**
+     * Taille des données audio
+     */
     int dataSize;
+    /**
+     * Tableau de doubles contenant les données audio
+     */
     double[] audio;
+    /**
+     * Tableau d'entiers contenant les bits de sortie
+     */
     int[] outputBits;
+    /**
+     * Tableau de caractères contenant les caractères décodés
+     */
     char[] decodedChars;
 
     /**
