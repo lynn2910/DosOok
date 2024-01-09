@@ -1,7 +1,7 @@
 import java.awt.*;
 import java.util.Arrays;
 
-class LPFilter2 {
+class LPFilter1 {
     public static void main(String[] args) {
         // Création d'un signal audio de test (par exemple, un signal sinusoïdal)
         int numSamples = 1000;
@@ -13,7 +13,7 @@ class LPFilter2 {
             }
         }
 
-        LPFilter2 lpFilter = new LPFilter2();
+        LPFilter1 lpFilter = new LPFilter1();
 
         // Application du filtre passe-bas
         double[] filteredSignal = lpFilter.lpFilter(inputSignal, 750, 200);

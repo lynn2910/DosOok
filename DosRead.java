@@ -1,5 +1,6 @@
 import java.awt.*;
 import java.io.*;
+import java.util.Arrays;
 
 public class DosRead {
     static final int FP = 1000;
@@ -31,6 +32,7 @@ public class DosRead {
             bitsPerSample = byteArrayToInt(header, 34, 16);
             // Read the size of the data (offset 40, 4 bytes)
             dataSize = byteArrayToInt(header, 40, 32);
+
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {
@@ -65,24 +67,32 @@ public class DosRead {
         byte[] audioData = new byte[dataSize];
         double max = Math.pow(2, bitsPerSample - 1);
         try {
-            fileInputStream.read(audioData);
+            int bytesRead = fileInputStream.read(audioData);
 
             // Crée un tableau de doubles appelé audio pour stocker les valeurs normalisées des échantillons audio.
             // La taille du tableau est déterminée en fonction du nombre d'octets par échantillon (bitsPerSample / 8)
             // et de la taille totale des données audio dans audioData.
-            audio = new double[audioData.length / (bitsPerSample / 8)];
+
+            // On s'assure qu'audioData est un multiple de 2.
+            audioData = Arrays.copyOf(audioData, bytesRead + bytesRead % 2);
+
+            // Initialisez le tableau audio si c'est la première fois
+            if (audio == null) {
+                audio = new double[audioData.length / (bitsPerSample / 8)];
+            }
 
             for (int i = 0; i < audio.length; i++) {
                 int byteFaible = audioData[2 * i];
                 int byteFort = audioData[2 * i + 1];
 
-                int echantillon = (byteFort << 8) | (byteFaible & 255); // Composition un échantillon sur 16 bits
+                int echantillon = (byteFort << 8) | (byteFaible & 255); // Composition d'un échantillon sur 16 bits
                 audio[i] = echantillon / max; // Normalise l'échantillon sur [-1, 1]
             }
         } catch (IOException e) {
             System.out.println("Erreur de lecture des données audio: " + e.getMessage());
         }
     }
+
 
     /**
      * Reverse the negative values of the audio array
@@ -137,7 +147,7 @@ public class DosRead {
         double[] resampledAudio = new double[audio.length / period];
 
         // Cette liste contiendra les bits obtenus par l'algorithme.
-        outputBits = new int[resampledAudio.length - START_SEQ.length + 1];
+        outputBits = new int[resampledAudio.length - START_SEQ.length];
 
         // Nous calculons la fréquence maximale.
         int max = (int) (Math.pow(2, bitsPerSample));
@@ -155,7 +165,7 @@ public class DosRead {
             double bit = max * (sum / period) > threshold ? 1 : 0;
 
             // Nous enregistrons le bit s'il n'est pas dans la séquence de début.
-            if (i > START_SEQ.length)
+            if (i > START_SEQ.length - 1)
                 outputBits[i - START_SEQ.length] = (int) bit;
 
             // Finalement, nous allons repasser une dernière fois dans cette partie de l'audio
@@ -176,9 +186,9 @@ public class DosRead {
     public void decodeBitsToChar() {
         // Cette condition a pour objectif de ne pas avoir de mauvaises surprises en ayant un nombre de bits incomplet
         // ou de ne pas avoir de bits du tout.
-        if (outputBits == null || outputBits.length % bitsPerSample != 0) {
-            throw new IllegalArgumentException("Invalid outputBits array.");
-        }
+
+        if (outputBits.length % bitsPerSample != 0)
+            throw new IllegalArgumentException("Invalid outputBits array: " + (outputBits.length) + " bytes is not a multiple of the bitsPerSample");
 
         // Nous définissons `decodedChars` comme un tableau de caractères vides et dont la longueur
         // est le nombre de bits divisé par le nombre de bits par caractère.
@@ -320,8 +330,8 @@ public class DosRead {
         dosRead.audioRectifier();
         // apply a low pass filter
         dosRead.audioLPFilter(44);
-        // Resample audio data and apply a threshold to output only 0 & 1
-        dosRead.audioResampleAndThreshold(dosRead.sampleRate/BAUDS, 20000 );
+//        // Resample audio data and apply a threshold to output only 0 & 1
+        dosRead.audioResampleAndThreshold(dosRead.sampleRate/BAUDS, 20000);
 
         dosRead.decodeBitsToChar();
         if (dosRead.decodedChars != null){
