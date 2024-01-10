@@ -2,3 +2,6 @@
 *.class
 DosOok_message.wav
 saves
+lp_filter/*.txt
+lp_filter/audio1.txt
+lp_filter/audio2.txt

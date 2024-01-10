@@ -394,6 +394,9 @@ public class LPFilter1Etude {
         LPFilter1Etude.readAudioDouble();
         // reverse the negative values
         LPFilter1Etude.audioRectifier();
+
+        writeToFile("audio1.txt", LPFilter1Etude.audio);
+
         // apply a low pass filter
         long now = timestamp();
         LPFilter1Etude.audioLPFilter(44);
@@ -406,8 +409,6 @@ public class LPFilter1Etude {
             System.out.print("Message décodé : ");
             printIntArray(LPFilter1Etude.decodedChars);
         }
-
-        writeToFile("audio1.txt", LPFilter1Etude.audio);
         displaySig(LPFilter1Etude.audio, 0, LPFilter1Etude.audio.length-1, "line", "Signal audio");
 
         // Close the file input stream
