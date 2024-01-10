@@ -213,6 +213,25 @@ public class LPFilter1Etude {
         }
     }
 
+    public static String timestamp(long clock0) {
+        String result = null;
+
+        if (clock0 > 0) {
+            double elapsed = (System.nanoTime() - clock0) / 1e9;
+            String unit = "s";
+            if (elapsed < 1.0) {
+                elapsed *= 1000.0;
+                unit = "ms";
+            }
+            result = String.format("%.4g%s elapsed", elapsed, unit);
+        }
+        return result;
+    }
+
+    public static long timestamp() {
+        return System.nanoTime();
+    }
+
     /**
      * Decode the outputBits array to a char array
      * The decoding is done by comparing the START_SEQ with the actual beginning of outputBits.
@@ -376,7 +395,9 @@ public class LPFilter1Etude {
         // reverse the negative values
         LPFilter1Etude.audioRectifier();
         // apply a low pass filter
+        long now = timestamp();
         LPFilter1Etude.audioLPFilter(44);
+        System.out.println("LPFilter1Etude.audioLPFilter(44) " + timestamp(now));
         // Resample audio data and apply a threshold to output only 0 & 1
         LPFilter1Etude.audioResampleAndThreshold(LPFilter1Etude.sampleRate/BAUDS, 20000);
 

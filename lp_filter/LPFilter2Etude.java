@@ -360,6 +360,25 @@ public class LPFilter2Etude {
         }
     }
 
+    public static String timestamp(long clock0) {
+        String result = null;
+
+        if (clock0 > 0) {
+            double elapsed = (System.nanoTime() - clock0) / 1e9;
+            String unit = "s";
+            if (elapsed < 1.0) {
+                elapsed *= 1000.0;
+                unit = "ms";
+            }
+            result = String.format("%.4g%s elapsed", elapsed, unit);
+        }
+        return result;
+    }
+
+    public static long timestamp() {
+        return System.nanoTime();
+    }
+
     /**
      *  Un exemple de main qui doit pourvoir être exécuté avec les méthodes
      * que vous aurez conçues.
@@ -386,7 +405,9 @@ public class LPFilter2Etude {
         // reverse the negative values
         LPFilter2Etude.audioRectifier();
         // apply a low pass filter
+        long now = timestamp();
         LPFilter2Etude.audioLPFilter(44);
+        System.out.println("LPFilter1Etude.audioLPFilter(44) " + timestamp(now));
         // Resample audio data and apply a threshold to output only 0 & 1
         LPFilter2Etude.audioResampleAndThreshold(LPFilter2Etude.sampleRate/BAUDS, 20000);
 
