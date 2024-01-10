@@ -1,5 +1,3 @@
-package lp_filter;
-
 /******************************************************************************
  *  Compilation:  javac StdDraw.java
  *  Execution:    java StdDraw

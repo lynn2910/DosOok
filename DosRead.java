@@ -1,3 +1,15 @@
+/**
+ * Étudiants:
+ * - Cédric Colin
+ * - Marvyn Levin
+ *
+ * Groupe: S1 B1 G5
+ *
+ * Cette class permet de lire un fichier audio wav et de décoder le message caché à l'intérieur.
+ */
+
+
+
 import java.awt.*;
 import java.io.*;
 import java.util.Arrays;

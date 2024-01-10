@@ -15,7 +15,7 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-public class LPFilter1Etude {
+public class LPFilter2Etude {
     /**
      * Fréquence de la porteuse
      */
@@ -163,21 +163,31 @@ public class LPFilter1Etude {
             throw new IllegalArgumentException("Number of samples (n) must be greater than 0");
 
         // On crée un tableau qui contiendra notre audio filtré
-        double[] filteredAudio = new double[audio.length];
+//        double[] filteredAudio = new double[audio.length];
+//
+//        // Nous appliquons le filtre passe-bas
+//        for (int i = n - 1; i < audio.length; i++) {
+//            // On calcule la somme des fréquences audio pour cette partie
+//            double sum = 0;
+//            for (int j = 0; j < n; j++)
+//                sum += audio[i - j];
+//
+//            // On n'a plus qu'à enregistrer dans notre liste la moyenne
+//            filteredAudio[i] = sum / n;
+//        }
 
-        // Nous appliquons le filtre passe-bas
-        for (int i = n - 1; i < audio.length; i++) {
-            // On calcule la somme des fréquences audio pour cette partie
-            double sum = 0;
-            for (int j = 0; j < n; j++)
-                sum += audio[i - j];
+        double rc = 1.0 / (2 * Math.PI * FP);
+        double dt = 1.0 / sampleRate;
+        double alpha = dt / (rc + dt);
+        double[] output = new double[audio.length];
 
-            // On n'a plus qu'à enregistrer dans notre liste la moyenne
-            filteredAudio[i] = sum / n;
+        for (int i = 1; i < audio.length; i++) {
+            output[i] = ((1 - alpha) * output[i - 1]) + (alpha * audio[i]);
         }
 
+
         // Copy the filtered audio back to the original array
-        System.arraycopy(filteredAudio, 0, audio, 0, audio.length);
+        System.arraycopy(output, 0, audio, 0, audio.length);
     }
 
 
@@ -276,7 +286,7 @@ public class LPFilter1Etude {
     private static void writeToFile(String filePath, double[] data) {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath))) {
             for (Double row : data) {
-                writer.write(row.toString().replace('.', ',')); // Remplace le point par une virgule
+                writer.write(row.toString().replace('.', ','));
                 writer.newLine();  // Ajoute une nouvelle ligne après chaque valeur
             }
         } catch (IOException e) {
@@ -356,42 +366,42 @@ public class LPFilter1Etude {
      */
     public static void main(String[] args) {
         if (args.length != 1) {
-            System.out.println("Usage: java LPFilter1Etude <input_wav_file>");
+            System.out.println("Usage: java LPFilter2Etude <input_wav_file>");
             return;
         }
         String wavFilePath = args[0];
 
         // Open the WAV file and read its header
-        LPFilter1Etude LPFilter1Etude = new LPFilter1Etude();
-        LPFilter1Etude.readWavHeader(wavFilePath);
+        LPFilter2Etude LPFilter2Etude = new LPFilter2Etude();
+        LPFilter2Etude.readWavHeader(wavFilePath);
 
         // Print the audio data properties
         System.out.println("Fichier audio: " + wavFilePath);
-        System.out.println("\tSample Rate: " + LPFilter1Etude.sampleRate + " Hz");
-        System.out.println("\tBits per Sample: " + LPFilter1Etude.bitsPerSample + " bits");
-        System.out.println("\tData Size: " + LPFilter1Etude.dataSize + " bytes");
+        System.out.println("\tSample Rate: " + LPFilter2Etude.sampleRate + " Hz");
+        System.out.println("\tBits per Sample: " + LPFilter2Etude.bitsPerSample + " bits");
+        System.out.println("\tData Size: " + LPFilter2Etude.dataSize + " bytes");
 
         // Read the audio data
-        LPFilter1Etude.readAudioDouble();
+        LPFilter2Etude.readAudioDouble();
         // reverse the negative values
-        LPFilter1Etude.audioRectifier();
+        LPFilter2Etude.audioRectifier();
         // apply a low pass filter
-        LPFilter1Etude.audioLPFilter(44);
+        LPFilter2Etude.audioLPFilter(44);
         // Resample audio data and apply a threshold to output only 0 & 1
-        LPFilter1Etude.audioResampleAndThreshold(LPFilter1Etude.sampleRate/BAUDS, 20000);
+        LPFilter2Etude.audioResampleAndThreshold(LPFilter2Etude.sampleRate/BAUDS, 20000);
 
-        LPFilter1Etude.decodeBitsToChar();
-        if (LPFilter1Etude.decodedChars != null){
+        LPFilter2Etude.decodeBitsToChar();
+        if (LPFilter2Etude.decodedChars != null){
             System.out.print("Message décodé : ");
-            printIntArray(LPFilter1Etude.decodedChars);
+            printIntArray(LPFilter2Etude.decodedChars);
         }
 
-        writeToFile("audio1.txt", LPFilter1Etude.audio);
-        displaySig(LPFilter1Etude.audio, 0, LPFilter1Etude.audio.length-1, "line", "Signal audio");
+        writeToFile("audio2.txt", LPFilter2Etude.audio);
+        displaySig(LPFilter2Etude.audio, 0, LPFilter2Etude.audio.length-1, "line", "Signal audio");
 
         // Close the file input stream
         try {
-            LPFilter1Etude.fileInputStream.close();
+            LPFilter2Etude.fileInputStream.close();
         } catch (IOException e) {
             e.printStackTrace();
         }

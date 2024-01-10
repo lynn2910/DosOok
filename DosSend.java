@@ -1,3 +1,14 @@
+/**
+ * Étudiants:
+ * - Cédric Colin
+ * - Marvyn Levin
+ *
+ * Groupe: S1 B1 G5
+ *
+ * Cette classe permet de générer un fichier audio .wav à partir d'un message texte.
+ */
+
+
 import java.awt.*;
 import java.io.File;
 import java.io.FileOutputStream;
